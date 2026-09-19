@@ -70,19 +70,18 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
         fi
 
-    # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
+  # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
     - name: Send Slack Notification on Success
       if: success()
       uses: rtCamp/action-slack-notify@v2
       env:
-        # Оставляем только ОДНУ переменную строго по документации плагина
+        # Пишем БЕЗ кавычек, чтобы избежать двойного экранирования на self-hosted раннере
         SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_CHANNEL: 'general'
-        SLACK_USERNAME: 'K8s Monitor Bot'
+        SLACK_CHANNEL: general
+        SLACK_USERNAME: K8s Monitor Bot
         SLACK_ICON_EMOJI: ':white_check_mark:'
         SLACK_COLOR: '#00FF00'
         SLACK_TITLE: '✅ K8s кластер полностью здоров!'
-        # Используем обычную подстановку без экранирования слэшей
         SLACK_MESSAGE: |
           *Статистика кластера:*
           • Всего подов в кластере: `${{ env.TOTAL_PODS_COUNT }}`
@@ -101,8 +100,8 @@ jobs:
       uses: rtCamp/action-slack-notify@v2
       env:
         SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_CHANNEL: 'general'
-        SLACK_USERNAME: 'K8s Monitor Bot'
+        SLACK_CHANNEL: general
+        SLACK_USERNAME: K8s Monitor Bot
         SLACK_ICON_EMOJI: ':rotating_light:'
         SLACK_COLOR: '#FF0000'
         SLACK_TITLE: '🚨 Критический сбой в Kubernetes!'
