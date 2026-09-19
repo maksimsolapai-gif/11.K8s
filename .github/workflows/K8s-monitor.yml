@@ -29,7 +29,7 @@ jobs:
         echo "=== Сканирование локального кластера ==="
         
         # Получаем только проблемные поды, исключая заголовки и пустые строки
-        FAILED_PODS=$(kubectl get pods -A --no-headers | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
+        FAILED_PODS=$(kubectl get pods -A --context k3s ; kubectl get pods -A --context k8s | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
         
         # Проверяем, действительно ли переменная содержит текст (удаляя пробелы)
         if [ -n "$(echo "$FAILED_PODS" | tr -d '[:space:]')" ]; then
