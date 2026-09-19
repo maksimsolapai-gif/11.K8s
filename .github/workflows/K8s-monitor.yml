@@ -75,13 +75,14 @@ jobs:
       if: success()
       uses: rtCamp/action-slack-notify@v2
       env:
+        # Оставляем только ОДНУ переменную строго по документации плагина
         SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
         SLACK_CHANNEL: 'general'
         SLACK_USERNAME: 'K8s Monitor Bot'
         SLACK_ICON_EMOJI: ':white_check_mark:'
-        SLACK_COLOR: '#00FF00' # Зеленый цвет панели
-        SLACK_TITLE: '✅ К8s кластер полностью здоров!'
+        SLACK_COLOR: '#00FF00'
+        SLACK_TITLE: '✅ K8s кластер полностью здоров!'
+        # Используем обычную подстановку без экранирования слэшей
         SLACK_MESSAGE: |
           *Статистика кластера:*
           • Всего подов в кластере: `${{ env.TOTAL_PODS_COUNT }}`
@@ -90,7 +91,7 @@ jobs:
           
           *Список запущенных подов:*
           ```
-          \${{ env.ALL_PODS_LIST }}
+          ${{ env.ALL_PODS_LIST }}
           ```
           _Все проверки пройдены успешно._
 
@@ -100,17 +101,14 @@ jobs:
       uses: rtCamp/action-slack-notify@v2
       env:
         SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
         SLACK_CHANNEL: 'general'
         SLACK_USERNAME: 'K8s Monitor Bot'
         SLACK_ICON_EMOJI: ':rotating_light:'
-        SLACK_COLOR: '#FF0000' # Красный цвет панели
+        SLACK_COLOR: '#FF0000'
         SLACK_TITLE: '🚨 Критический сбой в Kubernetes!'
         SLACK_MESSAGE: |
           *Обнаружены проблемные поды:*
           ```
-          \${{ env.FAILED_PODS_LIST }}
+          ${{ env.FAILED_PODS_LIST }}
           ```
           *Общая статистика на момент падения:* Подов всего: `${{ env.TOTAL_PODS_COUNT }}`, Активных: `${{ env.RUNNING_PODS_COUNT }}`.
-          
-          [Посмотреть детальные логи сбоя в GitHub](\${{ github.server_url }}/\({{{ github.repository }}/actions/runs/\){{ github.run_id }})
