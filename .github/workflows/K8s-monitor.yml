@@ -70,23 +70,27 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
         fi
 
-  # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
+   # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
     - name: Send Slack Notification on Success
       if: success()
+      env:
+        # Передаем секрет в переменную среды самого шага БЕЗ слэшей
+        SLACK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
         echo "=== Отправка отчета в Slack ==="
         
-        # Убран лишний слэш перед знаком доллара в адресе URL
         curl -X POST -H 'Content-type: application/json' \
           --data '{"text": "✅ *K8s кластер полностью здоров!*\n*Статистика:*\n• Всего подов: `${{ env.TOTAL_PODS_COUNT }}`\n• Running: `${{ env.RUNNING_PODS_COUNT }}`\n• Completed: `${{ env.COMPLETED_PODS_COUNT }}`"}' \
-          "\${{ secrets.SLACK_WEBHOOK_URL }}"
+          "\$SLACK_URL"
 
     # СЦЕНАРИЙ 2: Отправка уведомления при ОБНАРУЖЕНИИ ОШИБОК
     - name: Send Slack Notification on Failure
       if: failure() && env.ALERT_TRIGGERED == 'true'
+      env:
+        SLACK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
         echo "=== Отправка аларма в Slack ==="
         
         curl -X POST -H 'Content-type: application/json' \
           --data '{"text": "🚨 *Критический сбой в Kubernetes!*\n*Обнаружены проблемные поды:*\n```\n\${{ env.FAILED_PODS_LIST }}\n```"}' \
-          "${{ secrets.SLACK_WEBHOOK_URL }}"
+          "$SLACK_URL"
