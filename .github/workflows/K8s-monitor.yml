@@ -70,69 +70,23 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
         fi
 
-    # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке через curl
+ # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
     - name: Send Slack Notification on Success
       if: success()
       run: |
         echo "=== Отправка отчета в Slack ==="
         
-        # Чистый Bash-синтаксис без лишних экранирований
-        JSON_PAYLOAD=\$(cat <<EOF
-        {
-          "text": "✅ *K8s кластер полностью здоров!*",
-          "attachments": [
-            {
-              "color": "#00FF00",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Статистика кластера:*\n• Всего подов: \`${{ env.TOTAL_PODS_COUNT }}\`\n• В статусе Running: \`${{ env.RUNNING_PODS_COUNT }}\`\n• В статусе Completed: \`${{ env.COMPLETED_PODS_COUNT }}\`"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Список запущенных подов:*\n\`\`\`\n${{ env.ALL_PODS_LIST }}\n\`\`\`"
-                  }
-                }
-              ]
-            }
-          ]
-        }
-        EOF
-        )
-        
-        # Отправляем сформированную переменную в Slack
-        curl -X POST -H 'Content-type: application/json' --data "\(JSON_PAYLOAD" "\){{ secrets.SLACK_WEBHOOK_URL }}"
+        # Отправляем плоский JSON-пакет напрямую одной строкой
+        curl -X POST -H 'Content-type: application/json' \
+          --data '{"text": "✅ *K8s кластер полностью здоров!*\n*Статистика:*\n• Всего подов: `${{ env.TOTAL_PODS_COUNT }}`\n• Running: `${{ env.RUNNING_PODS_COUNT }}`\n• Completed: `${{ env.COMPLETED_PODS_COUNT }}`"}' \
+          "\${{ secrets.SLACK_WEBHOOK_URL }}"
 
-    # СЦЕНАРИЙ 2: Отправка уведомления при ОБНАРУЖЕНИИ ОШИБОК через curl
+    # СЦЕНАРИЙ 2: Отправка уведомления при ОБНАРУЖЕНИИ ОШИБОК
     - name: Send Slack Notification on Failure
       if: failure() && env.ALERT_TRIGGERED == 'true'
       run: |
         echo "=== Отправка аларма в Slack ==="
         
-        JSON_PAYLOAD=\$(cat <<EOF
-        {
-          "text": "🚨 *Критический сбой в Kubernetes!*",
-          "attachments": [
-            {
-              "color": "#FF0000",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Обнаружены проблемные поды:*\n\`\`\`\n${{ env.FAILED_PODS_LIST }}\n\`\`\`"
-                  }
-                }
-              ]
-            }
-          ]
-        }
-        EOF
-        )
-        
-        curl -X POST -H 'Content-type: application/json' --data "\(JSON_PAYLOAD" "\){{ secrets.SLACK_WEBHOOK_URL }}"
+        curl -X POST -H 'Content-type: application/json' \
+          --data '{"text": "🚨 *Критический сбой в Kubernetes!*\n*Обнаружены проблемные поды:*\n```\n\${{ env.FAILED_PODS_LIST }}\n```"}' \
+          "${{ secrets.SLACK_WEBHOOK_URL }}"
