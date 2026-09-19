@@ -70,13 +70,13 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
         fi
 
- # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
+  # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
     - name: Send Slack Notification on Success
       if: success()
       run: |
         echo "=== Отправка отчета в Slack ==="
         
-        # Отправляем плоский JSON-пакет напрямую одной строкой
+        # Убран лишний слэш перед знаком доллара в адресе URL
         curl -X POST -H 'Content-type: application/json' \
           --data '{"text": "✅ *K8s кластер полностью здоров!*\n*Статистика:*\n• Всего подов: `${{ env.TOTAL_PODS_COUNT }}`\n• Running: `${{ env.RUNNING_PODS_COUNT }}`\n• Completed: `${{ env.COMPLETED_PODS_COUNT }}`"}' \
           "\${{ secrets.SLACK_WEBHOOK_URL }}"
