@@ -30,27 +30,28 @@ jobs:
         RUNNING_PODS=$(kubectl get pods -A --no-headers | grep -c "Running" || true)
         COMPLETED_PODS=$(kubectl get pods -A --no-headers | grep -c "Completed" || true)
         
-        # Записываем общую статистику в переменные окружения GitHub env
+        # Записываем простую статистику в переменные окружения
         echo "TOTAL_PODS_COUNT=$TOTAL_PODS" >> $GITHUB_ENV
         echo "RUNNING_PODS_COUNT=$RUNNING_PODS" >> $GITHUB_ENV
         echo "COMPLETED_PODS_COUNT=$COMPLETED_PODS" >> $GITHUB_ENV
         
-        # 2. Ищем проблемные поды (которые НЕ Running и НЕ Completed)
+        # 2. Ищем проблемные поды
         FAILED_PODS=$(kubectl get pods -A --no-headers | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
         
-        # Проверяем, пустая ли переменная с ошибками
+        # Проверяем на наличие ошибок
         if [ -n "$(echo "$FAILED_PODS" | tr -d '[:space:]')" ]; then
           echo "ALERT_TRIGGERED=true" >> $GITHUB_ENV
           echo "❌ ОБНАРУЖЕНЫ СБОИ В ПОДАХ!"
           
-          CLEANED_PODS=$(echo "$FAILED_PODS" | awk '{print $0 "\\n"}')
-          echo "FAILED_PODS_LIST=$CLEANED_PODS" >> $GITHUB_ENV
+          # Запись многострочного списка ошибок через EOF
+          echo "FAILED_PODS_LIST<<EOF" >> $GITHUB_ENV
+          echo "$FAILED_PODS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
           
-          # Вывод логов в консоль GitHub Actions для дебага
           echo "$FAILED_PODS" | while read -r ns name ready status restarts age; do
             if [ -z "$ns" ] || [ -z "$name" ]; then continue; fi
             echo "--------------------------------------------------"
-            echo "Поломка in Namespace: $ns | Pod: $name | Статус: $status"
+            echo "Поломка в Namespace: $ns | Pod: $name | Статус: $status"
             echo "--------------------------------------------------"
             kubectl describe pod "$name" -n "$ns" | tail -n 20
           done
@@ -60,11 +61,14 @@ jobs:
           echo "ALERT_TRIGGERED=false" >> $GITHUB_ENV
           echo "✅ Все поды работают штатно. Собираем список для отчета..."
           
-          # Получаем красивый компактный список всех живых подов (Namespace, Name, Status)
-          ALL_PODS_SUMMARY=$(kubectl get pods -A --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase" | awk '{print $0 "\\n"}')
-          echo "ALL_PODS_LIST=$ALL_PODS_SUMMARY" >> $GITHUB_ENV
+          # Получаем красивый список всех живых подов
+          ALL_PODS_SUMMARY=$(kubectl get pods -A --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase")
+          
+          # ПРАВИЛЬНАЯ запись многострочного списка через EOF для GitHub
+          echo "ALL_PODS_LIST<<EOF" >> $GITHUB_ENV
+          echo "$ALL_PODS_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
         fi
-
 
     # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
     - name: Send Slack Notification on Success
