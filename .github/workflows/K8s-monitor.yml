@@ -28,10 +28,11 @@ jobs:
       run: |
         echo "=== Сканирование локального кластера ==="
         
-        # Находим проблемные поды
-        FAILED_PODS=$(kubectl get pods -A --context k3s | grep -v -E "Running|Completed" || true)
+        # Получаем только проблемные поды, исключая заголовки и пустые строки
+        FAILED_PODS=$(kubectl get pods -A --no-headers | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
         
-        if [ ! -z "$FAILED_PODS" ]; then
+        # Проверяем, действительно ли переменная содержит текст (удаляя пробелы)
+        if [ -n "$(echo "$FAILED_PODS" | tr -d '[:space:]')" ]; then
           echo "ALERT_TRIGGERED=true" >> $GITHUB_ENV
           echo "❌ ОБНАРУЖЕНЫ СБОИ В ПОДАХ:"
           echo "$FAILED_PODS"
@@ -39,7 +40,11 @@ jobs:
           CLEANED_PODS=$(echo "$FAILED_PODS" | awk '{print $0 "\\n"}')
           echo "FAILED_PODS_LIST=$CLEANED_PODS" >> $GITHUB_ENV
           
+          # Читаем построчно только валидные данные
           echo "$FAILED_PODS" | while read -r ns name ready status restarts age; do
+            # Защита: если переменная ns или name пустая, пропускаем итерацию
+            if [ -z "$ns" ] || [ -z "$name" ]; then continue; fi
+            
             echo "--------------------------------------------------"
             echo "Поломка в Namespace: $ns | Pod: $name | Статус: $status"
             echo "--------------------------------------------------"
@@ -50,8 +55,9 @@ jobs:
           exit 1
         else
           echo "ALERT_TRIGGERED=false" >> $GITHUB_ENV
-          echo "✅ Все поды работают штатно."
+          echo "✅ Все поды работают штатно. Падений не обнаружено."
         fi
+
 
     - name: Send Slack Notification on Failure
       if: failure() && env.ALERT_TRIGGERED == 'true'
