@@ -26,9 +26,9 @@ jobs:
         echo "=== Сбор общей статистики кластера ==="
         
         # 1. Считаем общее количество подов и количество подов по статусам
-        TOTAL_PODS=$(kubectl get pods -A --context k3s kubectl get pods -A --context k8s | wc -l | tr -d ' ')
-        RUNNING_PODS=$(kubectl get pods -A --context k3s kubectl get pods -A --context k8s | grep -c "Running" || true)
-        COMPLETED_PODS=$(kubectl get pods -A --context k3s kubectl get pods -A --context k8s | grep -c "Completed" || true)
+        TOTAL_PODS=$(kubectl get pods -A --context k3s ; kubectl get pods -A --context k8s | wc -l | tr -d ' ')
+        RUNNING_PODS=$(kubectl get pods -A --context k3s ; kubectl get pods -A --context k8s | grep -c "Running" || true)
+        COMPLETED_PODS=$(kubectl get pods -A --context k3s ; kubectl get pods -A --context k8s | grep -c "Completed" || true)
         
         # Записываем простую статистику в переменные окружения
         echo "TOTAL_PODS_COUNT=$TOTAL_PODS" >> $GITHUB_ENV
@@ -36,7 +36,7 @@ jobs:
         echo "COMPLETED_PODS_COUNT=$COMPLETED_PODS" >> $GITHUB_ENV
         
         # 2. Ищем проблемные поды
-        FAILED_PODS=$(kubectl get pods -A --context k3s kubectl get pods -A --context k8s | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
+        FAILED_PODS=$(kubectl get pods -A --context k3s ; kubectl get pods -A --context k8s | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
         
         # Проверяем на наличие ошибок
         if [ -n "$(echo "$FAILED_PODS" | tr -d '[:space:]')" ]; then
