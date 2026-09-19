@@ -1,0 +1,71 @@
+name: Kubernetes Cluster Monitor Pro (Local Slack)
+
+on:
+  push:
+    branches: [ main, master ]
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch: 
+
+jobs:
+  monitor:
+    # ТУТ САМАЯ ВАЖНАЯ СТРОКА: указываем выполнять задачу на твоем ПК
+    runs-on: self-hosted
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Шаг установки kubectl можно оставить на случай, если на раннере его нет,
+    # но так как ты его уже установил в Шаге 1 лабы, этот шаг отработает мгновенно.
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.31.0'
+
+    - name: Scan Cluster for Failed Pods
+      id: scan_k8s
+      run: |
+        echo "=== Сканирование локального кластера ==="
+        
+        # Находим проблемные поды
+        FAILED_PODS=$(kubectl get pods -A --context k3s | grep -v -E "Running|Completed" || true)
+        
+        if [ ! -z "$FAILED_PODS" ]; then
+          echo "ALERT_TRIGGERED=true" >> $GITHUB_ENV
+          echo "❌ ОБНАРУЖЕНЫ СБОИ В ПОДАХ:"
+          echo "$FAILED_PODS"
+          
+          CLEANED_PODS=$(echo "$FAILED_PODS" | awk '{print $0 "\\n"}')
+          echo "FAILED_PODS_LIST=$CLEANED_PODS" >> $GITHUB_ENV
+          
+          echo "$FAILED_PODS" | while read -r ns name ready status restarts age; do
+            echo "--------------------------------------------------"
+            echo "Поломка в Namespace: $ns | Pod: $name | Статус: $status"
+            echo "--------------------------------------------------"
+            kubectl describe pod "$name" -n "$ns" | tail -n 20
+            kubectl logs "$name" -n "$ns" --all-containers --tail=15 || echo "Логи недоступны"
+          done
+          
+          exit 1
+        else
+          echo "ALERT_TRIGGERED=false" >> $GITHUB_ENV
+          echo "✅ Все поды работают штатно."
+        fi
+
+    - name: Send Slack Notification on Failure
+      if: failure() && env.ALERT_TRIGGERED == 'true'
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_CHANNEL: 'general'
+        SLACK_USERNAME: 'K8s Monitor Bot'
+        SLACK_ICON_EMOJI: ':rotating_light:'
+        SLACK_COLOR: '#FF0000'
+        SLACK_TITLE: '🚨 Критический сбой в локальном K8s!'
+        SLACK_MESSAGE: |
+          *Обнаружены проблемные поды:*
+          ```
+          \${{ env.FAILED_PODS_LIST }}
+          ```
+          *Хост-раннер:* ${{ github.run_id }} на локальной машине.
