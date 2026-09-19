@@ -70,44 +70,69 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
         fi
 
-  # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
+     # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке через curl
     - name: Send Slack Notification on Success
       if: success()
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        # Пишем БЕЗ кавычек, чтобы избежать двойного экранирования на self-hosted раннере
-        SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_CHANNEL: general
-        SLACK_USERNAME: K8s Monitor Bot
-        SLACK_ICON_EMOJI: ':white_check_mark:'
-        SLACK_COLOR: '#00FF00'
-        SLACK_TITLE: '✅ K8s кластер полностью здоров!'
-        SLACK_MESSAGE: |
-          *Статистика кластера:*
-          • Всего подов в кластере: `${{ env.TOTAL_PODS_COUNT }}`
-          • В статусе Running: `${{ env.RUNNING_PODS_COUNT }}`
-          • В статусе Completed: `${{ env.COMPLETED_PODS_COUNT }}`
-          
-          *Список запущенных подов:*
-          ```
-          ${{ env.ALL_PODS_LIST }}
-          ```
-          _Все проверки пройдены успешно._
+      run: |
+        echo "=== Отправка отчета в Slack ==="
+        
+        # Формируем JSON-сообщение для Slack с блочной структурой
+        JSON_PAYLOAD=\$(cat <<EOF
+        {
+          "text": "✅ *K8s кластер полностью здоров!*",
+          "attachments": [
+            {
+              "color": "#00FF00",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Статистика кластера:*\n• Всего подов: \`${{ env.TOTAL_PODS_COUNT }}\`\n• В статусе Running: \`${{ env.RUNNING_PODS_COUNT }}\`\n• В статусе Completed: \`${{ env.COMPLETED_PODS_COUNT }}\`"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Список запущенных подов:*\n\`\`\`\n${{ env.ALL_PODS_LIST }}\n\`\`\`"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+        EOF
+        )
+        
+        # Отправляем запрос напрямую на Webhook URL
+        curl -X POST -H 'Content-type: application/json' --data "\(JSON_PAYLOAD" "\){{ secrets.SLACK_WEBHOOK_URL }}"
 
-    # СЦЕНАРИЙ 2: Отправка уведомления при ОБНАРУЖЕНИИ ОШИБОК
+    # СЦЕНАРИЙ 2: Отправка уведомления при ОБНАРУЖЕНИИ ОШИБОК через curl
     - name: Send Slack Notification on Failure
       if: failure() && env.ALERT_TRIGGERED == 'true'
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_CHANNEL: general
-        SLACK_USERNAME: K8s Monitor Bot
-        SLACK_ICON_EMOJI: ':rotating_light:'
-        SLACK_COLOR: '#FF0000'
-        SLACK_TITLE: '🚨 Критический сбой в Kubernetes!'
-        SLACK_MESSAGE: |
-          *Обнаружены проблемные поды:*
-          ```
-          ${{ env.FAILED_PODS_LIST }}
-          ```
-          *Общая статистика на момент падения:* Подов всего: `${{ env.TOTAL_PODS_COUNT }}`, Активных: `${{ env.RUNNING_PODS_COUNT }}`.
+      run: |
+        echo "=== Отправка аларма в Slack ==="
+        
+        JSON_PAYLOAD=\$(cat <<EOF
+        {
+          "text": "🚨 *Критический сбой в Kubernetes!*",
+          "attachments": [
+            {
+              "color": "#FF0000",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Обнаружены проблемные поды:*\n\`\`\`\n${{ env.FAILED_PODS_LIST }}\n\`\`\`"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+        EOF
+        )
+        
+        curl -X POST -H 'Content-type: application/json' --data "\(JSON_PAYLOAD" "\){{ secrets.SLACK_WEBHOOK_URL }}"
