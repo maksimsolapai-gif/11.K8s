@@ -1,4 +1,4 @@
-name: Kubernetes Cluster Monitor Pro (Local Slack)
+name: Kubernetes Cluster Monitor Pro (Full Status Slack)
 
 on:
   push:
@@ -9,69 +9,103 @@ on:
 
 jobs:
   monitor:
-    # ТУТ САМАЯ ВАЖНАЯ СТРОКА: указываем выполнять задачу на твоем ПК
     runs-on: self-hosted
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Шаг установки kubectl можно оставить на случай, если на раннере его нет,
-    # но так как ты его уже установил в Шаге 1 лабы, этот шаг отработает мгновенно.
     - name: Set up kubectl
       uses: azure/setup-kubectl@v3
       with:
         version: 'v1.31.0'
 
-    - name: Scan Cluster for Failed Pods
+    - name: Scan Cluster and Gather Stats
       id: scan_k8s
       run: |
-        echo "=== Сканирование локального кластера ==="
+        echo "=== Сбор общей статистики кластера ==="
         
-        # Получаем только проблемные поды, исключая заголовки и пустые строки
-        FAILED_PODS=$(kubectl get pods -A --context k3s kubectl get pods -A --context k8s | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
+        # 1. Считаем общее количество подов и количество подов по статусам
+        TOTAL_PODS=\$(kubectl get pods -A --no-headers | wc -l | tr -d ' ')
+        RUNNING_PODS=\$(kubectl get pods -A --no-headers | grep -c "Running" || true)
+        COMPLETED_PODS=\$(kubectl get pods -A --no-headers | grep -c "Completed" || true)
         
-        # Проверяем, действительно ли переменная содержит текст (удаляя пробелы)
-        if [ -n "$(echo "$FAILED_PODS" | tr -d '[:space:]')" ]; then
-          echo "ALERT_TRIGGERED=true" >> $GITHUB_ENV
-          echo "❌ ОБНАРУЖЕНЫ СБОИ В ПОДАХ:"
-          echo "$FAILED_PODS"
+        # Записываем общую статистику в переменные окружения
+        echo "TOTAL_PODS_COUNT=\(TOTAL_PODS" >> \)GITHUB_ENV
+        echo "RUNNING_PODS_COUNT=\(RUNNING_PODS" >> \)GITHUB_ENV
+        echo "COMPLETED_PODS_COUNT=\(COMPLETED_PODS" >> \)GITHUB_ENV
+        
+        # 2. Ищем проблемные поды (которые НЕ Running и НЕ Completed)
+        FAILED_PODS=\$(kubectl get pods -A --no-headers | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
+        
+        # Проверяем, пустая ли переменная с ошибками
+        if [ -n "\((echo "\)FAILED_PODS" | tr -d '[:space:]')" ]; then
+          echo "ALERT_TRIGGERED=true" >> \$GITHUB_ENV
+          echo "❌ ОБНАРУЖЕНЫ СБОИ В ПОДАХ!"
           
-          CLEANED_PODS=$(echo "$FAILED_PODS" | awk '{print $0 "\\n"}')
-          echo "FAILED_PODS_LIST=$CLEANED_PODS" >> $GITHUB_ENV
+          CLEANED_PODS=\((echo "\)FAILED_PODS" | awk '{print \$0 "\\n"}')
+          echo "FAILED_PODS_LIST=\(CLEANED_PODS" >> \)GITHUB_ENV
           
-          # Читаем построчно только валидные данные
-          echo "$FAILED_PODS" | while read -r ns name ready status restarts age; do
-            # Защита: если переменная ns или name пустая, пропускаем итерацию
-            if [ -z "$ns" ] || [ -z "$name" ]; then continue; fi
-            
+          # Вывод логов в консоль GitHub Actions для дебага
+          echo "\$FAILED_PODS" | while read -r ns name ready status restarts age; do
+            if [ -z "\(ns" ] \vert{}\vert{} [ -z "\)name" ]; then continue; fi
             echo "--------------------------------------------------"
-            echo "Поломка в Namespace: $ns | Pod: $name | Статус: $status"
+            echo "Поломка в Namespace: \$ns | Pod: \(name \vert{} Статус: \)status"
             echo "--------------------------------------------------"
-            kubectl describe pod "$name" -n "$ns" | tail -n 20
-            kubectl logs "$name" -n "$ns" --all-containers --tail=15 || echo "Логи недоступны"
+            kubectl describe pod "\(name" -n "\)ns" | tail -n 20
           done
           
           exit 1
         else
-          echo "ALERT_TRIGGERED=false" >> $GITHUB_ENV
-          echo "✅ Все поды работают штатно. Падений не обнаружено."
+          echo "ALERT_TRIGGERED=false" >> \$GITHUB_ENV
+          echo "✅ Все поды работают штатно. Собираем список для отчета..."
+          
+          # Получаем красивый компактный список всех живых подов (Namespace, Name, Status)
+          ALL_PODS_SUMMARY=\$(kubectl get pods -A --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase" | awk '{print \$0 "\\n"}')
+          echo "ALL_PODS_LIST=\(ALL_PODS_SUMMARY" >> \)GITHUB_ENV
         fi
 
+    # СЦЕНАРИЙ 1: Отправка уведомления при УСПЕШНОЙ проверке
+    - name: Send Slack Notification on Success
+      if: success()
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_CHANNEL: 'general'
+        SLACK_USERNAME: 'K8s Monitor Bot'
+        SLACK_ICON_EMOJI: ':white_check_mark:'
+        SLACK_COLOR: '#00FF00' # Зеленый цвет панели
+        SLACK_TITLE: '✅ К8s кластер полностью здоров!'
+        SLACK_MESSAGE: |
+          *Статистика кластера:*
+          • Всего подов в кластере: `${{ env.TOTAL_PODS_COUNT }}`
+          • В статусе Running: `${{ env.RUNNING_PODS_COUNT }}`
+          • В статусе Completed: `${{ env.COMPLETED_PODS_COUNT }}`
+          
+          *Список запущенных подов:*
+          ```
+          \${{ env.ALL_PODS_LIST }}
+          ```
+          _Все проверки пройдены успешно._
 
+    # СЦЕНАРИЙ 2: Отправка уведомления при ОБНАРУЖЕНИИ ОШИБОК
     - name: Send Slack Notification on Failure
       if: failure() && env.ALERT_TRIGGERED == 'true'
       uses: rtCamp/action-slack-notify@v2
       env:
-        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK: \${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
         SLACK_CHANNEL: 'general'
         SLACK_USERNAME: 'K8s Monitor Bot'
         SLACK_ICON_EMOJI: ':rotating_light:'
-        SLACK_COLOR: '#FF0000'
-        SLACK_TITLE: '🚨 Критический сбой в локальном K8s!'
+        SLACK_COLOR: '#FF0000' # Красный цвет панели
+        SLACK_TITLE: '🚨 Критический сбой в Kubernetes!'
         SLACK_MESSAGE: |
           *Обнаружены проблемные поды:*
           ```
           \${{ env.FAILED_PODS_LIST }}
           ```
-          *Хост-раннер:* ${{ github.run_id }} на локальной машине.
+          *Общая статистика на момент падения:* Подов всего: `${{ env.TOTAL_PODS_COUNT }}`, Активных: `${{ env.RUNNING_PODS_COUNT }}`.
+          
+          [Посмотреть детальные логи сбоя в GitHub](\${{ github.server_url }}/\({{{ github.repository }}/actions/runs/\){{ github.run_id }})
