@@ -25,46 +25,53 @@ jobs:
       run: |
         echo "=== Сбор общей статистики кластера ==="
         
-        # 1. Считаем общее количество подов и количество подов по статусам
-        TOTAL_PODS=$((kubectl get pods -A --context k3s; kubectl get pods -A --context k8s) | wc -l | tr -d ' ')
-        RUNNING_PODS=$((kubectl get pods -A --context k3s; kubectl get pods -A --context k8s) | grep -c "Running" || true)
-        COMPLETED_PODS=$((kubectl get pods -A --context k3s; kubectl get pods -A --context k8s) | grep -c "Completed" || true)
+        # 1. Считаем поды с двух кластеров (обрати внимание на синтаксис скобок '$( ( ... ) | ... )')
+        TOTAL_PODS=$( (kubectl get pods -A --no-headers --context k3s; kubectl get pods -A --no-headers --context k8s) | wc -l | tr -d ' ')
+        RUNNING_PODS=$( (kubectl get pods -A --no-headers --context k3s; kubectl get pods -A --no-headers --context k8s) | grep -c "Running" || true)
+        COMPLETED_PODS=$( (kubectl get pods -A --no-headers --context k3s; kubectl get pods -A --no-headers --context k8s) | grep -c "Completed" || true)
         
-        # Записываем простую статистику в переменные окружения
         echo "TOTAL_PODS_COUNT=$TOTAL_PODS" >> $GITHUB_ENV
         echo "RUNNING_PODS_COUNT=$RUNNING_PODS" >> $GITHUB_ENV
         echo "COMPLETED_PODS_COUNT=$COMPLETED_PODS" >> $GITHUB_ENV
         
-        # 2. Ищем проблемные поды
-        FAILED_PODS=$((kubectl get pods -A --context k3s; kubectl get pods -A --context k8s) | grep -v -E "Running|Completed" | grep -v -E "NAMESPACE" || true)
+        # 2. Ищем проблемные поды на обоих кластерах и маркируем их именами контекстов
+        FAILED_K3S=$(kubectl get pods -A --no-headers --context k3s | grep -v -E "Running|Completed" | awk '{print "[k3s] " $0}' || true)
+        FAILED_K8S=$(kubectl get pods -A --no-headers --context k8s | grep -v -E "Running|Completed" | awk '{print "[k8s] " $0}' || true)
         
-        # Проверяем на наличие ошибок
+        # Объединяем упавшие поды в один список
+        FAILED_PODS=$(echo -e "${FAILED_K3S}\n${FAILED_K8S}" | grep -v -E '^$' || true)
+        
         if [ -n "$(echo "$FAILED_PODS" | tr -d '[:space:]')" ]; then
           echo "ALERT_TRIGGERED=true" >> $GITHUB_ENV
           echo "❌ ОБНАРУЖЕНЫ СБОИ В ПОДАХ!"
           
-          # Запись многострочного списка ошибок через EOF
           echo "FAILED_PODS_LIST<<EOF" >> $GITHUB_ENV
           echo "$FAILED_PODS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
           
-          echo "$FAILED_PODS" | while read -r ns name ready status restarts age; do
-            if [ -z "$ns" ] || [ -z "$name" ]; then continue; fi
-            echo "--------------------------------------------------"
-            echo "Поломка в Namespace: $ns | Pod: $name | Статус: $status"
-            echo "--------------------------------------------------"
-            kubectl describe pod "$name" -n "$ns" | tail -n 20
+          # Логирование describe в консоль GitHub Actions
+          echo "$FAILED_K3S" | grep -v -E '^$' | while read -r tag ns name ready status restarts age; do
+            [ -z "$name" ] && continue
+            echo ">> Describe [k3s] $ns/$name"
+            kubectl describe pod "$name" -n "$ns" --context k3s | tail -n 15
+          done
+          echo "$FAILED_K8S" | grep -v -E '^$' | while read -r tag ns name ready status restarts age; do
+            [ -z "$name" ] && continue
+            echo ">> Describe [k8s] $ns/$name"
+            kubectl describe pod "$name" -n "$ns" --context k8s | tail -n 15
           done
           
           exit 1
         else
           echo "ALERT_TRIGGERED=false" >> $GITHUB_ENV
-          echo "✅ Все поды работают штатно. Собираем список для отчета..."
+          echo "✅ Все поды работают штатно. Собираем общий список для отчета..."
           
-          # Получаем красивый список всех живых подов
-          ALL_PODS_SUMMARY=$(kubectl get pods -A --context k3s kubectl get pods -A --context k8s -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase")
+          # Собираем красивый отчет по всем подам с указанием кластера
+          PODS_K3S=$(kubectl get pods -A --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase" --context k3s | awk '{print "[k3s] " $0}' || true)
+          PODS_K8S=$(kubectl get pods -A --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase" --context k8s | awk '{print "[k8s] " $0}' || true)
           
-          # ПРАВИЛЬНАЯ запись многострочного списка через EOF для GitHub
+          ALL_PODS_SUMMARY=$(echo -e "${PODS_K3S}\n${PODS_K8S}" | grep -v -E '^$' || true)
+          
           echo "ALL_PODS_LIST<<EOF" >> $GITHUB_ENV
           echo "$ALL_PODS_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
