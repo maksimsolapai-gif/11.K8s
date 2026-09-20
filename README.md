@@ -10,13 +10,14 @@
 
 ### Created GitHub action K8s-monitor.yml to check status of pods and create notification to Slack if you have crashed/failed pods
 
+* used a self-hosted runner on a local machine with access to the clusters in the laboratory
 
 
 <img width="1374" height="858" alt="image" src="https://github.com/user-attachments/assets/84a95b19-1501-43db-9e33-02d4aa4872c3" />
 
-### Success
+### Success Notification
 
 <img width="785" height="364" alt="image" src="https://github.com/user-attachments/assets/84a81103-bfb4-47a2-8d2e-3c40556fb516" />
 
-### For checking broken pod broken-pod.yml
+### For checking broken pod used broken-pod.yml
 <img width="857" height="431" alt="image" src="https://github.com/user-attachments/assets/bf68093c-1e4b-47e6-8a29-31c6725123e8" />
