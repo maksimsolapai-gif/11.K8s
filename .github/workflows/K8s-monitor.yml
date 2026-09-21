@@ -1,10 +1,10 @@
 name: Kubernetes Cluster Monitor Pro (Full Status Slack)
 
 on:
-  push:
-    branches: [ main, master ]
-  schedule:
-    - cron: '*/30 * * * *'
+#  push:
+#    branches: [ main, master ]
+#  schedule:
+#    - cron: '*/30 * * * *'
   workflow_dispatch: 
 
 jobs:
