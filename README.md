@@ -10,7 +10,10 @@
 
 ### Created GitHub action K8s-monitor.yml to check status of pods and create notification to Slack if you have crashed/failed pods
 
-* used a self-hosted runner on a local machine with access to the clusters in the laboratory
+* To implement monitoring, was used a **Self-Hosted Runner**:
+
+- **How ​​it works:** A lightweight agent (daemon) from GitHub runs on the local machine. It initiates a secure outbound connection (Websocket/HTTPS) to GitHub servers and continuously listens to the task queue.
+- **Security:** We **did not need to open ports** on the home router to the outside world, nor did we have to export sensitive `kubeconfig` files to the cloud. `kubectl` commands are executed locally within the secure perimeter of your machine.
 
 
 <img width="1374" height="858" alt="image" src="https://github.com/user-attachments/assets/84a95b19-1501-43db-9e33-02d4aa4872c3" />
